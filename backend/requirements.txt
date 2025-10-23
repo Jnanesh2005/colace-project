@@ -1,0 +1,10 @@
+django>=5.0,<5.1
+djangorestframework>=3.15,<3.16
+psycopg2-binary>=2.9,<3.0
+djoser>=2.2,<2.3
+Pillow>=10.0,<10.4
+django-cors-headers>=4.0,<5.0
+drf-nested-routers>=0.93,<0.94
+gunicorn
+whitenoise[brotli]
+dj-database-url

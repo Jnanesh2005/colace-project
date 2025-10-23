@@ -1,0 +1,24 @@
+# Python / Django
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.env
+db.sqlite3
+/media/
+
+# Node.js / Next.js
+node_modules/
+.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env*.local
+.DS_Store
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp

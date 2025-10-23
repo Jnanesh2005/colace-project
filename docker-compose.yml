@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: colace_backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=your-insecure-secret-key-for-development # CHANGE THIS
+      - DEBUG=1
+      - DB_NAME=colace_db
+      - DB_USER=colace_user
+      - DB_PASSWORD=colace_pass
+      - DB_HOST=db
+      - DB_PORT=5432
+      - EMAIL_HOST_USER=colace.app.mailer@gmail.com
+      - EMAIL_HOST_PASSWORD=rkmefvswgtxrqpmm
+    depends_on:
+      db:
+        condition: service_healthy # Wait for the database to be ready
+
+  db:
+    image: postgres:16-alpine
+    container_name: colace_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=colace_db
+      - POSTGRES_USER=colace_user
+      - POSTGRES_PASSWORD=colace_pass
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U colace_user -d colace_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
