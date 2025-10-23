@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import api from '@/lib/api'; // Use our custom API client
+import api from '@/lib/api';
+import { AxiosError } from 'axios'; // Import AxiosError
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -21,11 +22,17 @@ export default function RegisterPage() {
     setError('');
     setMessage('');
     try {
-      const response = await api.post('/register/', { email, password }, { withCredentials: true }); // Add this option
+      const response = await api.post('/register/', { email, password }, { withCredentials: true });
       setMessage(response.data.message);
       setStep(2);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+    } catch (err: unknown) { // Use unknown
+      // Type guard for AxiosError
+      if (err instanceof AxiosError && err.response) {
+        setError(err.response.data?.error || 'Registration failed.');
+      } else {
+        setError('An unexpected error occurred during registration.');
+        console.error(err); // Log unexpected errors
+      }
     } finally {
       setLoading(false);
     }
@@ -37,13 +44,19 @@ export default function RegisterPage() {
     setError('');
     setMessage('');
     try {
-      const response = await api.post('/register/verify/', { otp }, { withCredentials: true }); // Add this option
+      const response = await api.post('/register/verify/', { otp }, { withCredentials: true });
       setMessage(response.data.message + ' You can now log in.');
       setTimeout(() => {
         router.push('/');
       }, 2000);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Verification failed. Please try again.');
+    } catch (err: unknown) { // Use unknown
+      // Type guard for AxiosError
+      if (err instanceof AxiosError && err.response) {
+        setError(err.response.data?.error || 'Verification failed.');
+      } else {
+        setError('An unexpected error occurred during verification.');
+        console.error(err); // Log unexpected errors
+      }
     } finally {
       setLoading(false);
     }

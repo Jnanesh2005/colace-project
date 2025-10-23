@@ -1,17 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
 import AddMemberModal from '@/components/AddMemberModal';
 import CommentSection from '@/components/CommentSection';
+import { AxiosError } from 'axios'; // Import AxiosError
 
-// --- Define data structures ---
+// Interfaces (ensure these are complete and correct)
 interface Post {
   id: number;
   content: string;
   author_username: string;
+  author_profile_photo: string | null;
   created_at: string;
   comments: any[];
 }
@@ -39,10 +41,12 @@ export default function GroupDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchGroupData = async () => {
+  // Use useCallback for fetch function
+  const fetchGroupData = useCallback(async () => {
     if (!groupId) return;
+    // Set loading true here if you want loading state on refresh too
+    // setLoading(true);
     try {
-      // Fetch all necessary data in parallel
       const [groupRes, userRes, postsRes] = await Promise.all([
         api.get(`/groups/${groupId}/`),
         api.get('/auth/users/me/'),
@@ -51,25 +55,33 @@ export default function GroupDetailPage() {
       setGroup(groupRes.data);
       setCurrentUser(userRes.data);
       setPosts(postsRes.data);
-    } catch (err) {
+      setError(''); // Clear error on success
+    } catch (err: unknown) { // Use unknown
       console.error('Failed to fetch group data:', err);
-      setError('Group not found.');
+      // Type guard
+      if (err instanceof AxiosError && err.response?.status === 404) {
+        setError('Group not found.');
+      } else {
+        setError('Failed to load group data.');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [groupId]); // Add dependency
 
   useEffect(() => {
     fetchGroupData();
-  }, [groupId]);
+  }, [fetchGroupData]); // useEffect depends on the memoized fetch function
 
   const handleToggleMembership = async () => {
     if (!group) return;
     try {
       const response = await api.post(`/groups/${group.id}/toggle_membership/`);
+      // Update state directly based on response for faster UI feedback
       setGroup(prev => prev ? { ...prev, is_member: response.data.is_member, member_count: response.data.is_member ? prev.member_count + 1 : prev.member_count - 1 } : null);
     } catch (err) {
       console.error('Failed to update membership:', err);
+      // Optionally show an error message to the user
     }
   };
 
@@ -79,28 +91,25 @@ export default function GroupDetailPage() {
     try {
       await api.post('/posts/', { content: newPostContent, group: groupId });
       setNewPostContent('');
-      fetchGroupData(); // Refresh all data to show the new post
+      fetchGroupData(); // Refresh all data
     } catch (err) {
       console.error('Failed to create post in group:', err);
     }
   };
   
   const handleDeletePost = async (postId: number) => {
-    if (window.confirm('Are you sure you want to delete this post?')) {
-      try {
-        await api.delete(`/posts/${postId}/`);
-        fetchGroupData(); // Refresh group data to remove the post
-      } catch (error) {
-        console.error('Failed to delete post:', error);
-        alert('You can only delete your own posts.');
+      if (window.confirm('Are you sure you want to delete this post?')) {
+          try {
+              await api.delete(`/posts/${postId}/`);
+              fetchGroupData(); // Refresh group data
+          } catch (error) { console.error('Failed to delete post:', error); }
       }
-    }
   };
 
   if (loading) return <p className="text-white text-center mt-10">Loading group...</p>;
   if (error) return <p className="text-red-500 text-center mt-10">{error}</p>;
   if (!group) return null;
-
+  
   const isOwner = currentUser?.username === group.owner_username;
   const isMember = group.is_member;
 
@@ -108,7 +117,7 @@ export default function GroupDetailPage() {
     <>
       <main className="min-h-screen text-white p-4 sm:p-8">
         <div className="max-w-4xl mx-auto">
-          {/* Group Header */}
+          {/* Header */}
           <header className="mb-8">
             <Link href="/groups" className="text-blue-400 hover:underline mb-4 block">&larr; Back to All Groups</Link>
             <div className="bg-gray-800 p-6 rounded-lg">
@@ -146,27 +155,24 @@ export default function GroupDetailPage() {
               </div>
             )}
             <div className="space-y-4">
-              {posts.length > 0 ? (
-                posts.map((post) => (
-                  <div key={`${post.id}-${post.comments.length}`} className="bg-gray-800 p-4 rounded-lg">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <Link href={`/profile/${post.author_username}`} className="font-bold text-blue-400 hover:underline">{post.author_username}</Link>
-                        <span className="text-gray-500 text-sm ml-2">{new Date(post.created_at).toLocaleString()}</span>
-                      </div>
-                      {currentUser?.username === post.author_username && (
-                        <button onClick={() => handleDeletePost(post.id)} className="text-gray-500 hover:text-red-500 text-sm font-semibold">
-                          Delete
-                        </button>
-                      )}
+              {posts.map((post) => (
+                <div key={`${post.id}-${post.comments.length}`} className="bg-gray-800 p-4 rounded-lg">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <Link href={`/profile/${post.author_username}`} className="font-bold text-blue-400 hover:underline">{post.author_username}</Link>
+                      <span className="text-gray-500 text-sm ml-2">{new Date(post.created_at).toLocaleString()}</span>
                     </div>
-                    <p className="text-gray-300 whitespace-pre-wrap mt-2">{post.content}</p>
-                    <CommentSection postId={post.id} initialComments={post.comments} onCommentAdded={fetchGroupData} />
+                    {currentUser?.username === post.author_username && (
+                      <div className="flex space-x-3 text-sm font-semibold">
+                         {/* Edit button would go here if needed */}
+                         <button onClick={() => handleDeletePost(post.id)} className="text-gray-500 hover:text-red-500">Delete</button>
+                      </div>
+                    )}
                   </div>
-                ))
-              ) : (
-                <p className="text-center text-gray-500">No posts in this group yet. Be the first!</p>
-              )}
+                  <p className="text-gray-300 whitespace-pre-wrap mt-2">{post.content}</p>
+                  <CommentSection postId={post.id} initialComments={post.comments} onCommentAdded={fetchGroupData} />
+                </div>
+              ))}
             </div>
           </section>
         </div>
