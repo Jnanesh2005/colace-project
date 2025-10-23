@@ -1,36 +1,47 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation'; // 1. Import the router
-import axios from 'axios';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import api from '@/lib/api'; // 1. Import and use the configured api client
+import { AxiosError } from 'axios'; // 2. Import AxiosError for proper error handling
 
 export default function Home() {
-  const router = useRouter(); // 2. Initialize the router
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false); // Added loading state for button
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMessage('Logging in...');
+    setLoading(true); // Set loading true
+    let errorMessage = 'Login failed. Please check your credentials.'; // Default error
 
     try {
-      const response = await axios.post(
-        'http://localhost:8000/api/auth/token/login/', // Add /api here
+      // 3. Use the configured 'api' client here
+      const response = await api.post(
+        '/auth/token/login/', // No need for full URL, baseURL is in api.ts
         { email, password }
       );
 
       console.log('Login successful:', response.data);
-      setMessage(`Login successful! Token: ${response.data.auth_token}`);
+      setMessage(`Login successful! Redirecting...`);
 
-      // Save the token and redirect to the homepage
       localStorage.setItem('auth_token', response.data.auth_token);
-      router.push('/home'); // 3. This line redirects the user
+      router.push('/home');
 
-    } catch (error) {
-      console.error('Login failed:', error);
-      setMessage('Login failed. Please check your credentials.');
+    } catch (err: unknown) { // 4. Use unknown type for error
+      console.error('Login failed:', err);
+      // 5. Use AxiosError type guard
+      if (err instanceof AxiosError && err.response) {
+         // Use backend error message if available
+         errorMessage = err.response.data?.non_field_errors?.[0] || err.response.data?.detail || errorMessage;
+      }
+      setMessage(errorMessage);
+    } finally {
+        setLoading(false); // Set loading false
     }
   };
 
@@ -75,21 +86,20 @@ export default function Home() {
           <div>
             <button
               type="submit"
-              className="w-full px-4 py-2 font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-800"
+              disabled={loading} // Disable button while loading
+              className="w-full px-4 py-2 font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-800 disabled:bg-gray-500" // Added disabled style
             >
-              Log In
+              {loading ? 'Logging In...' : 'Log In'} {/* Added loading text */}
             </button>
           </div>
         </form>
-        {message && <p className="mt-4 text-center text-sm text-gray-400">{message}</p>}
-        {/* --- ADD THIS CODE --- */}
+        {message && <p className={`mt-4 text-center text-sm ${message.startsWith('Login failed') ? 'text-red-500' : 'text-green-400'}`}>{message}</p>} {/* Dynamic message color */}
         <p className="mt-6 text-center text-sm text-gray-400">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link href="/register" className="font-medium text-blue-400 hover:underline">
             Sign Up
           </Link>
         </p>
-        {/* ------------------- */}
       </div>
     </main>
   );
