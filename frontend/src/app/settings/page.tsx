@@ -4,15 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import Image from 'next/image';
-// Import type
-import type { UserProfile } from '@/types'; // Use the shared type
+import type { UserProfile } from '@/types'; // Import type
+import { AxiosError } from 'axios'; // Import AxiosError
 import Link from 'next/link';
 
 export default function EditProfilePage() {
   const router = useRouter();
-  // Removed unused state: profile, setProfile
-  // const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [currentUsername, setCurrentUsername] = useState<string>(''); // Store username for redirect
+  const [currentUsername, setCurrentUsername] = useState<string>('');
   const [bio, setBio] = useState('');
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -20,52 +18,39 @@ export default function EditProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Fetch current user data when the page loads
   useEffect(() => {
-    // Check for token first
     const token = localStorage.getItem('access_token');
     if (!token) {
-        router.push('/'); // Redirect if not logged in
+        router.push('/');
         return;
     }
-
     setLoading(true);
-    api.get<UserProfile>('/auth/users/me/') // Specify expected type
+    api.get<UserProfile>('/auth/users/me/')
       .then(res => {
-        // setProfile(res.data); // No longer needed
-        setCurrentUsername(res.data.username); // Store username for redirect
+        setCurrentUsername(res.data.username);
         setBio(res.data.bio || '');
         setPreview(res.data.profile_photo);
       })
       .catch(err => {
         console.error("Failed to fetch user data:", err);
-         localStorage.removeItem('access_token'); // Clear potentially invalid token
+         localStorage.removeItem('access_token');
          localStorage.removeItem('refresh_token');
-        router.push('/'); // Redirect to login if fetch fails
+        router.push('/');
       })
       .finally(() => setLoading(false));
-  }, [router]); // router is a dependency
+  }, [router]);
 
-  // Handle file selection and create a preview URL
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      // Optional: Add file size/type validation here
       setProfilePhoto(file);
-
-      // Clean up previous object URL to prevent memory leaks
       if (preview && preview.startsWith('blob:')) {
           URL.revokeObjectURL(preview);
       }
       setPreview(URL.createObjectURL(file));
-    } else {
-        // Optional: Handle case where user cancels file selection
-        // setProfilePhoto(null);
-        // setPreview(null); // Or reset to original profile photo?
     }
   };
 
-  // Handle form submission
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!currentUsername) {
@@ -74,40 +59,26 @@ export default function EditProfilePage() {
     }
     setSaving(true);
     setError('');
-
     const formData = new FormData();
-    // Only append bio if it has changed from the initial fetched value (optional optimization)
-    // Or simply always append the current state
     formData.append('bio', bio);
-
     if (profilePhoto) {
-      // Key name 'profile_photo' must match backend serializer/model field name
       formData.append('profile_photo', profilePhoto);
     }
 
     try {
-      // Use PATCH to update the user's profile (/auth/users/me/ is Djoser's endpoint)
-      const response = await api.patch<UserProfile>('/auth/users/me/', formData, {
-        headers: {
-            // Let Axios set Content-Type for FormData
-             // 'Content-Type': 'multipart/form-data', (usually not needed)
-         },
-      });
-      // Use the username from the response for redirection, just in case
+      const response = await api.patch<UserProfile>('/auth/users/me/', formData);
       const updatedUsername = response.data.username || currentUsername;
-      // Invalidate cache or simply redirect
       router.push(`/profile/${updatedUsername}`);
-      // router.refresh(); // Alternative: Refresh current route data if staying on page
-    } catch (err: any) {
+    } catch (err) { // Keep err as unknown
       console.error('Failed to update profile:', err);
-       let errorMsg = 'Failed to update profile. Please try again.';
-        if (err.response?.data) {
-            // Try to extract specific error messages from backend response
-            const responseData = err.response.data;
-            if (responseData.bio) errorMsg = `Bio: ${responseData.bio.join(', ')}`;
-            else if (responseData.profile_photo) errorMsg = `Profile Photo: ${responseData.profile_photo.join(', ')}`;
+      let errorMsg = 'Failed to update profile. Please try again.';
+      // Use AxiosError type guard
+      if (err instanceof AxiosError && err.response?.data) {
+            const responseData = err.response.data as any; // Use 'as any' carefully here
+            if (responseData.bio && Array.isArray(responseData.bio)) errorMsg = `Bio: ${responseData.bio.join(', ')}`;
+            else if (responseData.profile_photo && Array.isArray(responseData.profile_photo)) errorMsg = `Profile Photo: ${responseData.profile_photo.join(', ')}`;
             else if (responseData.detail) errorMsg = responseData.detail;
-            // Add more specific field checks if needed
+            // You might want to define a specific error response type instead of 'as any'
         }
       setError(errorMsg);
     } finally {
@@ -115,8 +86,8 @@ export default function EditProfilePage() {
     }
   };
 
-  // --- Render Logic ---
-  if (loading) return <p className="text-white text-center p-10">Loading settings...</p>;
+  // --- Render Logic (Keep the version from the previous response) ---
+   if (loading) return <p className="text-white text-center p-10">Loading settings...</p>;
 
   return (
     <main className="min-h-screen bg-gray-900 text-white p-4 sm:p-8">
@@ -141,9 +112,9 @@ export default function EditProfilePage() {
               <input
                 id="profile-photo-upload"
                 type="file"
-                accept="image/png, image/jpeg, image/gif" // Be specific about accepted types
+                accept="image/png, image/jpeg, image/gif"
                 onChange={handleFileChange}
-                className="hidden" // Keep hidden, triggered by label
+                className="hidden"
               />
                <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF accepted.</p>
             </div>
@@ -158,7 +129,7 @@ export default function EditProfilePage() {
               onChange={(e) => setBio(e.target.value)}
               className="w-full p-3 bg-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={4}
-              maxLength={200} // Optional: Add a max length
+              maxLength={200}
               placeholder="Tell us about yourself..."
             />
              <p className="text-xs text-gray-500 mt-1 text-right">{bio.length} / 200</p>
@@ -166,8 +137,8 @@ export default function EditProfilePage() {
 
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
-          {/* Submit Button */}
-          <div className="flex justify-end space-x-3">
+          {/* Buttons */}
+           <div className="flex justify-end space-x-3">
              <Link href={currentUsername ? `/profile/${currentUsername}` : '/home'}>
                  <button type="button" className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors">
                       Cancel
