@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import api from '@/lib/api';
 
 interface AddMemberModalProps {
@@ -10,69 +11,70 @@ interface AddMemberModalProps {
   onMemberAdded: () => void;
 }
 
-interface UserSearchResult {
-  id: number;
-  username: string;
-}
-
-export default function AddMemberModal({ isOpen, onClose, groupId, onMemberAdded }: AddMemberModalProps) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<UserSearchResult[]>([]);
-  const [addedMembers, setAddedMembers] = useState<number[]>([]);
-
-  // Search for users as the owner types
-  useEffect(() => {
-    if (query.trim() === '') {
-      setResults([]);
-      return;
-    }
-    const timer = setTimeout(() => {
-      api.get(`/users/?search=${query}`).then(res => setResults(res.data));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  const handleAddMember = async (username: string, userId: number) => {
-    try {
-      await api.post(`/groups/${groupId}/add_member/`, { username });
-      setAddedMembers(prev => [...prev, userId]); // Mark user as added
-      onMemberAdded(); // Refresh the parent component's data
-    } catch (error) {
-      console.error('Failed to add member:', error);
-      alert('Failed to add member. They may already be in the group.');
-    }
-  };
+export default function AddMemberModal({
+  isOpen,
+  onClose,
+  groupId,
+  onMemberAdded
+}: AddMemberModalProps) {
+  const [username, setUsername] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      await api.post(`/groups/${groupId}/add_member/`, { username });
+      setUsername('');
+      onMemberAdded();
+      onClose();
+    } catch (err) {
+      setError('Failed to add member. Check username.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50">
-      <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-4">Add Members</h2>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search for users to add..."
-          className="w-full p-2 bg-gray-700 rounded-md text-white mb-4"
-        />
-        <div className="space-y-2 max-h-60 overflow-y-auto">
-          {results.map(user => (
-            <div key={user.id} className="flex justify-between items-center p-2 bg-gray-700 rounded">
-              <span className="text-white">{user.username}</span>
-              <button
-                onClick={() => handleAddMember(user.username, user.id)}
-                disabled={addedMembers.includes(user.id)}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded disabled:bg-gray-500 disabled:cursor-not-allowed"
-              >
-                {addedMembers.includes(user.id) ? 'Added' : 'Add'}
-              </button>
-            </div>
-          ))}
-        </div>
-        <button onClick={onClose} className="mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full">
-          Done
-        </button>
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
+      <div className="bg-gray-900 p-6 rounded-lg shadow-lg w-96">
+        <h3 className="text-xl font-bold mb-4">Add Member</h3>
+
+        {error && <p className="text-red-500 mb-3">{error}</p>}
+
+        <form onSubmit={handleSubmit}>
+          <input
+            type="text"
+            placeholder="Enter username"
+            className="w-full p-2 mb-4 bg-gray-800 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+
+          <div className="flex justify-end space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-600"
+            >
+              {loading ? 'Adding...' : 'Add'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
