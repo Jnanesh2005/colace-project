@@ -65,6 +65,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3001",  # Add this line
     "http://127.0.0.1:3001",  # Add this line for good measure
     "http://10.184.16.217:3001",
+    "https://colace-frontend.onrender.com", # <--- ADD THIS LINE
 ]
 CORS_ALLOW_HEADERS = [
     'authorization',
