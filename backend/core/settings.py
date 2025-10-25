@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/5.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
-
+from datetime import timedelta
 from pathlib import Path
 import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -37,14 +37,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework', # Add DRF
-    'rest_framework.authtoken', # Add this line
-    'djoser',         # Add Djoser
-    'corsheaders', # Add this
+    'rest_framework',
+    # 'rest_framework.authtoken', # Remove or comment out if using JWT
+    'rest_framework_simplejwt', # Add this for Simple JWT
+    'djoser',
+    'corsheaders',
     'users',
     'posts',
-    'relationships', # Add this line
-    'groups', # Add this line
+    'relationships',
+    'groups',
 ]
 
 MIDDLEWARE = [
@@ -62,15 +63,15 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://localhost:3001",  # Add this line
-    "http://127.0.0.1:3001",  # Add this line for good measure
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
     "http://10.184.16.217:3001",
-    "https://colace-frontend.onrender.com", # <--- ADD THIS LINE
+    "https://colace-frontend.onrender.com",
 ]
 CORS_ALLOW_HEADERS = [
     'authorization',
     'content-type',
-    'cache-control', # <-- Add this line
+    'cache-control',
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -158,31 +159,79 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'users.User'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.TokenAuthentication', # Change this line
+        # Use JWT authentication globally
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ),
 }
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': False,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY, # Uses Django's SECRET_KEY
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'JWK_URL': None,
+    'LEEWAY': 0,
+
+    'AUTH_HEADER_TYPES': ('Bearer', 'JWT',), # Allow 'Bearer' or 'JWT' prefix
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id', # Primary key of the user model
+    'USER_ID_CLAIM': 'user_id', # Claim name in the token payload for user ID
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+
+    'JTI_CLAIM': 'jti',
+
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+}
 
 # Djoser settings
+# Djoser settings
 DJOSER = {
-    'USER_ID_FIELD': 'id',
-    'LOGIN_FIELD': 'email',
-    'SEND_ACTIVATION_EMAIL': False, # Set to True in production
+    'PASSWORD_RESET_CONFIRM_URL': '#/password/reset/confirm/{uid}/{token}',
+    'USERNAME_RESET_CONFIRM_URL': '#/username/reset/confirm/{uid}/{token}',
+    'ACTIVATION_URL': '#/activate/{uid}/{token}',
+    'SEND_ACTIVATION_EMAIL': False, # Keep False for now, requires email setup
+    'LOGIN_FIELD': 'email', # Tell Djoser to use email for its views
+    'USER_CREATE_PASSWORD_RETYPE': False, # Simpler registration form
+    'PASSWORD_CHANGED_EMAIL_CONFIRMATION': False,
+    'USERNAME_CHANGED_EMAIL_CONFIRMATION': False,
     'SERIALIZERS': {
-    'user_create': 'djoser.serializers.UserCreateSerializer',
-    'user': 'users.serializers.UserProfileSerializer', # Use our new serializer
-    'current_user': 'users.serializers.UserProfileSerializer', # Use it here too
-},
+        # Ensure these serializers exist in users/serializers.py
+        'user_create': 'users.serializers.UserCreateSerializer',
+        'user': 'users.serializers.UserSerializer',
+        'current_user': 'users.serializers.UserSerializer',
+        # You might need password_reset, etc., if using those features
+    },
+     'PERMISSIONS': {
+        'user_create': ['rest_framework.permissions.AllowAny'],
+        'user_delete': ['djoser.permissions.CurrentUserOrAdmin'],
+        'user': ['djoser.permissions.CurrentUserOrAdmin'],
+        'user_list': ['djoser.permissions.CurrentUserOrAdmin'],
+        'token_create': ['rest_framework.permissions.AllowAny'], # Djoser's token views
+        'token_destroy': ['rest_framework.permissions.IsAuthenticated'],
+    },
+    'SOCIAL_AUTH_ALLOWED_REDIRECT_URIS': [], # Add social auth URLs if used
 }
-# Email Configuration
+# --- Email and Media settings ---
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-# Media files (uploads)
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

@@ -8,3 +8,4 @@ drf-nested-routers>=0.93,<0.94
 gunicorn
 whitenoise[brotli]
 dj-database-url
+djangorestframework-simplejwt>=5.0,<6.0

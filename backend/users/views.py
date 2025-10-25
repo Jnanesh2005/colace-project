@@ -6,6 +6,10 @@ from rest_framework import generics, status, views, filters
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .serializers import UserProfileSerializer # 1. Use the new serializer name
+
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import authenticate
 User = get_user_model()
 
 def is_indian_college_email(email):
@@ -92,3 +96,44 @@ class UserListView(generics.ListAPIView):
     serializer_class = UserProfileSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['username']
+
+
+# Custom Serializer to handle email as username
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = User.EMAIL_FIELD # Use email field for lookup
+
+    # You might not strictly need validate if USERNAME_FIELD is email,
+    # but this ensures the underlying authenticate call works as expected.
+    def validate(self, attrs):
+        # We expect 'email' and 'password' in attrs based on LOGIN_FIELD = 'email'
+        # The default authenticate() looks for 'username', so we map it.
+        # Note: Django's authenticate uses the model's USERNAME_FIELD for lookup.
+        # Since our USERNAME_FIELD is 'email', this mapping might be redundant
+        # but doesn't hurt. The key is SIMPLE_JWT and DJOSER settings.
+
+        # Let's try authenticating directly with email
+        password = attrs.get("password")
+        user = authenticate(
+            request=self.context.get("request"),
+            username=attrs.get(self.username_field), # This will be the email
+            password=password,
+        )
+
+        if not user:
+             raise serializers.ValidationError("No active account found with the given credentials")
+
+
+        # Default validation generates the token
+        data = super().validate(attrs)
+
+        # You can add custom claims to the token here if needed
+        # refresh = self.get_token(self.user)
+        # data["your_custom_claim"] = "your_value"
+        # data["refresh"] = str(refresh)
+        # data["access"] = str(refresh.access_token)
+
+        return data
+
+# Custom View using the custom serializer
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer

@@ -1,20 +1,22 @@
+// frontend/src/lib/api.ts
+
 import axios from 'axios';
 
-// Get the API base URL from the environment variable
 const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const api = axios.create({
-  baseURL: baseURL, // Use the variable here
+  baseURL: baseURL,
 });
 
-// Interceptor to add the auth token (no changes here)
+// Interceptor to add the JWT access token
 api.interceptors.request.use(
   (config) => {
-    // Check if running on the client-side before accessing localStorage
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('auth_token');
+      // ***** CHANGE TOKEN KEY and PREFIX *****
+      const token = localStorage.getItem('access_token'); // Get the access token
       if (token) {
-        config.headers.Authorization = `Token ${token}`;
+        // Use 'Bearer' prefix (or 'JWT ' if you prefer, matching SIMPLE_JWT settings)
+        config.headers.Authorization = `Bearer ${token}`;
       }
     }
     return config;
@@ -23,5 +25,8 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+// Optional: Add response interceptor for automatic token refresh (more advanced)
+// api.interceptors.response.use(...)
 
 export default api;
