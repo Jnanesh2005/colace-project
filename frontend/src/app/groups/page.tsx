@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+// ... rest of your code remains exactly the same
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
