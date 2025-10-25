@@ -1,3 +1,4 @@
+# backend/users/views.py
 import random
 from django.core.mail import send_mail
 from django.conf import settings
@@ -5,13 +6,34 @@ from django.contrib.auth import get_user_model
 from rest_framework import generics, status, views, filters
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from .serializers import UserProfileSerializer # 1. Use the new serializer name
+# ***** CHANGE IMPORT HERE *****
+from .serializers import UserSerializer # Use the correct serializer name
+User = get_user_model()
 
+# --- Custom JWT Classes (Keep these from previous step) ---
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import authenticate
-User = get_user_model()
 
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = User.EMAIL_FIELD
+    def validate(self, attrs):
+        password = attrs.get("password")
+        user = authenticate(
+            request=self.context.get("request"),
+            username=attrs.get(self.username_field),
+            password=password,
+        )
+        if not user:
+             raise serializers.ValidationError("No active account found with the given credentials")
+        data = super().validate(attrs)
+        return data
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+
+# --- Existing functions/classes below (is_indian_college_email, RegistrationView, VerificationView) ---
+# --- Make sure they remain as they were ---
 def is_indian_college_email(email):
     """
     A simple check for common Indian academic domains.
@@ -40,7 +62,7 @@ class RegistrationView(views.APIView):
 
         otp = random.randint(100000, 999999)
         request.session['registration_data'] = {'email': email, 'password': password, 'otp': otp}
-        
+
         try:
             send_mail(
                 'Your Colace Account Verification Code',
@@ -50,9 +72,12 @@ class RegistrationView(views.APIView):
                 fail_silently=False,
             )
         except Exception as e:
-            return Response({'error': f'Failed to send verification email. Error: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # It's good practice to log the actual error for debugging
+            print(f"Error sending email: {e}") # Log to console/Render logs
+            return Response({'error': f'Failed to send verification email.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({'message': 'OTP sent to your email. Please verify to complete registration.'}, status=status.HTTP_200_OK)
+
 
 class VerificationView(views.APIView):
     """
@@ -62,28 +87,53 @@ class VerificationView(views.APIView):
     permission_classes = [AllowAny] # Allow public access
 
     def post(self, request, *args, **kwargs):
-        user_otp = request.data.get('otp')
+        user_otp_str = request.data.get('otp') # Get OTP as string
         registration_data = request.session.get('registration_data')
 
         if not registration_data:
             return Response({'error': 'Registration session expired or not found. Please register again.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not user_otp or int(user_otp) != registration_data['otp']:
+        # Safely convert user input OTP to integer for comparison
+        try:
+            user_otp_int = int(user_otp_str) if user_otp_str else -1 # Handle empty input
+        except (ValueError, TypeError):
+             return Response({'error': 'Invalid OTP format.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        if user_otp_int != registration_data.get('otp'): # Use .get() for safety
             return Response({'error': 'Invalid OTP.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.create_user(
-            username=registration_data['email'].split('@')[0],
-            email=registration_data['email'],
-            password=registration_data['password']
-        )
-        
-        del request.session['registration_data']
+        # Ensure required data exists before creating user
+        email = registration_data.get('email')
+        password = registration_data.get('password')
+        if not email or not password:
+             return Response({'error': 'Session data incomplete. Please register again.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        try:
+            user = User.objects.create_user(
+                # Generate a unique username if needed, or handle potential conflicts
+                username=email.split('@')[0] + str(random.randint(100,999)), # Example: add random digits
+                email=email,
+                password=password
+            )
+        except Exception as e:
+             # Log the error for debugging
+             print(f"Error creating user: {e}")
+             return Response({'error': 'Failed to create user account.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+        # Clear session data only on success
+        if 'registration_data' in request.session:
+            del request.session['registration_data']
 
         return Response({'message': 'Account created successfully!'}, status=status.HTTP_201_CREATED)
 
+
+# ***** CHANGE SERIALIZER CLASS HERE *****
 class UserProfileView(generics.RetrieveAPIView):
     queryset = User.objects.all()
-    serializer_class = UserProfileSerializer
+    serializer_class = UserSerializer # Use the correct serializer name
     lookup_field = 'username'
 
     def get_serializer_context(self):
@@ -91,49 +141,9 @@ class UserProfileView(generics.RetrieveAPIView):
         context.update({"request": self.request})
         return context
 
+# ***** CHANGE SERIALIZER CLASS HERE *****
 class UserListView(generics.ListAPIView):
     queryset = User.objects.all()
-    serializer_class = UserProfileSerializer
+    serializer_class = UserSerializer # Use the correct serializer name
     filter_backends = [filters.SearchFilter]
-    search_fields = ['username']
-
-
-# Custom Serializer to handle email as username
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    username_field = User.EMAIL_FIELD # Use email field for lookup
-
-    # You might not strictly need validate if USERNAME_FIELD is email,
-    # but this ensures the underlying authenticate call works as expected.
-    def validate(self, attrs):
-        # We expect 'email' and 'password' in attrs based on LOGIN_FIELD = 'email'
-        # The default authenticate() looks for 'username', so we map it.
-        # Note: Django's authenticate uses the model's USERNAME_FIELD for lookup.
-        # Since our USERNAME_FIELD is 'email', this mapping might be redundant
-        # but doesn't hurt. The key is SIMPLE_JWT and DJOSER settings.
-
-        # Let's try authenticating directly with email
-        password = attrs.get("password")
-        user = authenticate(
-            request=self.context.get("request"),
-            username=attrs.get(self.username_field), # This will be the email
-            password=password,
-        )
-
-        if not user:
-             raise serializers.ValidationError("No active account found with the given credentials")
-
-
-        # Default validation generates the token
-        data = super().validate(attrs)
-
-        # You can add custom claims to the token here if needed
-        # refresh = self.get_token(self.user)
-        # data["your_custom_claim"] = "your_value"
-        # data["refresh"] = str(refresh)
-        # data["access"] = str(refresh.access_token)
-
-        return data
-
-# Custom View using the custom serializer
-class CustomTokenObtainPairView(TokenObtainPairView):
-    serializer_class = CustomTokenObtainPairSerializer
+    search_fields = ['username', 'email'] # Allow searching by email too
