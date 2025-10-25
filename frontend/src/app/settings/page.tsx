@@ -4,9 +4,17 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import Image from 'next/image';
-import type { UserProfile } from '@/types'; // Import type
-import { AxiosError } from 'axios'; // Import AxiosError
+import type { UserProfile } from '@/types';
+import { AxiosError } from 'axios';
 import Link from 'next/link';
+
+// Define error response type
+interface ErrorResponse {
+  bio?: string[];
+  profile_photo?: string[];
+  detail?: string;
+  [key: string]: unknown; // For any other unexpected fields
+}
 
 export default function EditProfilePage() {
   const router = useRouter();
@@ -21,8 +29,8 @@ export default function EditProfilePage() {
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) {
-        router.push('/');
-        return;
+      router.push('/');
+      return;
     }
     setLoading(true);
     api.get<UserProfile>('/auth/users/me/')
@@ -33,8 +41,8 @@ export default function EditProfilePage() {
       })
       .catch(err => {
         console.error("Failed to fetch user data:", err);
-         localStorage.removeItem('access_token');
-         localStorage.removeItem('refresh_token');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
         router.push('/');
       })
       .finally(() => setLoading(false));
@@ -45,7 +53,7 @@ export default function EditProfilePage() {
       const file = e.target.files[0];
       setProfilePhoto(file);
       if (preview && preview.startsWith('blob:')) {
-          URL.revokeObjectURL(preview);
+        URL.revokeObjectURL(preview);
       }
       setPreview(URL.createObjectURL(file));
     }
@@ -54,8 +62,8 @@ export default function EditProfilePage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!currentUsername) {
-        setError("User data not loaded correctly. Please refresh.");
-        return;
+      setError("User data not loaded correctly. Please refresh.");
+      return;
     }
     setSaving(true);
     setError('');
@@ -69,25 +77,29 @@ export default function EditProfilePage() {
       const response = await api.patch<UserProfile>('/auth/users/me/', formData);
       const updatedUsername = response.data.username || currentUsername;
       router.push(`/profile/${updatedUsername}`);
-    } catch (err) { // Keep err as unknown
+    } catch (err: unknown) {
       console.error('Failed to update profile:', err);
       let errorMsg = 'Failed to update profile. Please try again.';
-      // Use AxiosError type guard
+      
+      // Proper TypeScript error handling without 'any'
       if (err instanceof AxiosError && err.response?.data) {
-            const responseData = err.response.data as any; // Use 'as any' carefully here
-            if (responseData.bio && Array.isArray(responseData.bio)) errorMsg = `Bio: ${responseData.bio.join(', ')}`;
-            else if (responseData.profile_photo && Array.isArray(responseData.profile_photo)) errorMsg = `Profile Photo: ${responseData.profile_photo.join(', ')}`;
-            else if (responseData.detail) errorMsg = responseData.detail;
-            // You might want to define a specific error response type instead of 'as any'
+        const responseData = err.response.data as ErrorResponse;
+        
+        if (responseData.bio && Array.isArray(responseData.bio)) {
+          errorMsg = `Bio: ${responseData.bio.join(', ')}`;
+        } else if (responseData.profile_photo && Array.isArray(responseData.profile_photo)) {
+          errorMsg = `Profile Photo: ${responseData.profile_photo.join(', ')}`;
+        } else if (responseData.detail) {
+          errorMsg = responseData.detail;
         }
+      }
       setError(errorMsg);
     } finally {
       setSaving(false);
     }
   };
 
-  // --- Render Logic (Keep the version from the previous response) ---
-   if (loading) return <p className="text-white text-center p-10">Loading settings...</p>;
+  if (loading) return <p className="text-white text-center p-10">Loading settings...</p>;
 
   return (
     <main className="min-h-screen bg-gray-900 text-white p-4 sm:p-8">
@@ -98,7 +110,12 @@ export default function EditProfilePage() {
           <div className="flex items-center space-x-4">
             <div className="relative w-24 h-24 flex-shrink-0">
               {preview ? (
-                <Image src={preview} alt="Profile preview" layout="fill" className="rounded-full object-cover border-2 border-gray-700" />
+                <Image 
+                  src={preview} 
+                  alt="Profile preview" 
+                  fill
+                  className="rounded-full object-cover border-2 border-gray-700" 
+                />
               ) : (
                 <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center text-gray-500 border-2 border-gray-700">
                   <span className="text-sm">No Image</span>
@@ -116,7 +133,7 @@ export default function EditProfilePage() {
                 onChange={handleFileChange}
                 className="hidden"
               />
-               <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF accepted.</p>
+              <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF accepted.</p>
             </div>
           </div>
 
@@ -132,26 +149,26 @@ export default function EditProfilePage() {
               maxLength={200}
               placeholder="Tell us about yourself..."
             />
-             <p className="text-xs text-gray-500 mt-1 text-right">{bio.length} / 200</p>
+            <p className="text-xs text-gray-500 mt-1 text-right">{bio.length} / 200</p>
           </div>
 
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
           {/* Buttons */}
-           <div className="flex justify-end space-x-3">
-             <Link href={currentUsername ? `/profile/${currentUsername}` : '/home'}>
-                 <button type="button" className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors">
-                      Cancel
-                  </button>
-             </Link>
-             <button
-                type="submit"
-                disabled={saving}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500 transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-             </button>
-           </div>
+          <div className="flex justify-end space-x-3">
+            <Link href={currentUsername ? `/profile/${currentUsername}` : '/home'}>
+              <button type="button" className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                Cancel
+              </button>
+            </Link>
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500 transition-colors"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
         </form>
       </div>
     </main>
